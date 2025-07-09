@@ -50,7 +50,6 @@ def sign_in(
         statement = select(User).where(User.username == request.username)
         user = session.exec(statement).first()
     except OperationalError:
-        # Adatbázis hiba (pl. Azure DB alszik vagy hálózati gond)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Server waking up, please try again soon.",
@@ -70,6 +69,12 @@ def sign_in(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin users can sign in.",
+        )
+
     access_token = create_access_token(data={"sub": user.username})
 
     return TokenWithUser(
@@ -78,6 +83,7 @@ def sign_in(
         user=UserRead(
             id=user.id,
             username=user.username,
+            email=user.email,
             role=user.role,
             created_at=user.created_at,
         ),

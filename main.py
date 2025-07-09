@@ -7,6 +7,7 @@ from database.connection import create_db_and_tables
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from routers.auth import authentication
+from routers.user import users
 
 
 @asynccontextmanager
@@ -34,3 +35,4 @@ app.add_middleware(
 )
 
 app.include_router(authentication.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")

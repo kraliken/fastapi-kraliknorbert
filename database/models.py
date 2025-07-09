@@ -2,6 +2,7 @@ from sqlmodel import Field, SQLModel, Relationship
 from enum import Enum
 from typing import Optional, List
 from datetime import datetime, timezone
+from pydantic import EmailStr
 
 
 class Role(str, Enum):
@@ -25,6 +26,10 @@ class User(SQLModel, table=True):
 class UserCreate(SQLModel):
     username: str
     password: str
+
+
+class UserUpdate(SQLModel):
+    email: str
 
 
 class UserRead(SQLModel):
