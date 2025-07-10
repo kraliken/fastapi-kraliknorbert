@@ -49,7 +49,6 @@ def sign_in(
     try:
         statement = select(User).where(User.username == request.username)
         user = session.exec(statement).first()
-        print(user)
     except OperationalError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

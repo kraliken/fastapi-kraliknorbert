@@ -12,12 +12,13 @@ router = APIRouter(prefix="/todos", tags=["todos"])
 
 @router.get("/", response_model=List[TodoRead])
 def get_todos(
-    current_user: Annotated[User, Depends(get_current_user)],
+    # current_user: Annotated[User, Depends(get_current_user)],
     session: SessionDep,
     category: str | None = None,
     period: str | None = None,
 ):
-    base_query = select(Todo).where(Todo.user_id == current_user.id)
+    # base_query = select(Todo).where(Todo.user_id == current_user.id)
+    base_query = select(Todo)
 
     if category:
         base_query = base_query.where(Todo.category == category)

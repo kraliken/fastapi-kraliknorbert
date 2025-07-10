@@ -42,6 +42,7 @@ def get_current_user(
 
     try:
         payload = jwt.decode(token, secret_key, algorithms=[algorithm])
+
         username = payload.get("sub")
 
         if username is None:
