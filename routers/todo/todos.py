@@ -67,3 +67,17 @@ def create_todo(
     session.commit()
     session.refresh(db_todo)
     return db_todo
+
+
+@router.delete("/{todo_id}")
+def delete_todo(
+    todo_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: SessionDep,
+):
+    todo = session.get(Todo, todo_id)
+    if not todo or todo.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    session.delete(todo)
+    session.commit()
+    return {"ok": True}
