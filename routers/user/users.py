@@ -5,7 +5,7 @@ from routers.auth.oauth2 import get_current_user
 from database.connection import SessionDep
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-router = APIRouter(prefix="/user", tags=["user"])
+router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.patch("/update", response_model=UserRead)

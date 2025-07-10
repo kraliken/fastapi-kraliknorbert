@@ -12,7 +12,7 @@ database = os.getenv("DB_DATABASE")
 
 connection_string = (
     f"mssql+pyodbc://{username}:{password}@{server}:1433/{database}"
-    "?driver=ODBC+Driver+17+for+SQL+Server"
+    "?driver=ODBC+Driver+18+for+SQL+Server"
     "&encrypt=yes"
     "&trustservercertificate=no"
     "&connection+timeout=30"

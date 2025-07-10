@@ -22,6 +22,8 @@ class User(SQLModel, table=True):
     hashed_password: str = Field(max_length=255)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    todos: List["Todo"] = Relationship(back_populates="user")
+
 
 class UserCreate(SQLModel):
     username: str
@@ -51,3 +53,53 @@ class TokenWithUser(Token):
 
 class TokenData(SQLModel):
     username: str | None = None
+
+
+class Category(str, Enum):
+    work = "work"
+    personal = "personal"
+    development = "development"
+
+
+class Status(str, Enum):
+    backlog = "backlog"
+    progress = "progress"
+    done = "done"
+
+
+class Todo(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str = Field(index=True, min_length=3, max_length=255)
+    description: Optional[str] = None
+    category: Category = Field(default=Category.personal)
+    status: Status = Field(default=Status.backlog)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    modified_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: Optional[datetime] = None
+    deadline: datetime
+    priority: Optional[int] = Field(default=1, ge=1, le=5)
+    archived: bool = Field(default=False)
+
+    user_id: int = Field(foreign_key="users.id")
+    user: Optional[User] = Relationship(back_populates="todos")
+
+
+class TodoRead(SQLModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    category: Category
+    status: Status
+    created_at: datetime
+    modified_at: datetime
+    completed_at: Optional[datetime] = None
+    deadline: datetime
+
+
+class TodoCreate(SQLModel):
+    title: str
+    description: Optional[str] = None
+    category: Optional[Category] = Category.personal
+    status: Optional[Status] = Status.backlog
+    deadline: datetime
+    priority: Optional[int] = 1
