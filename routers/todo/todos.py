@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, status, HTTPException, Response
+from fastapi import APIRouter, Depends, status, HTTPException, Response, Query
 from database.connection import SessionDep
-from database.models import Todo, TodoCreate, TodoRead, User
+from database.models import Todo, TodoCreate, TodoRead, TodoUpdate, User
 from sqlmodel import select, func
-from typing import Annotated, List
+from enum import Enum
+from typing import Annotated, List, Optional
 from datetime import datetime, timezone, timedelta
 from routers.auth.oauth2 import get_current_user
 from zoneinfo import ZoneInfo
@@ -10,18 +11,34 @@ from zoneinfo import ZoneInfo
 router = APIRouter(prefix="/todos", tags=["todos"])
 
 
+class StatusEnum(str, Enum):
+    backlog = "backlog"
+    progress = "progress"
+    done = "done"
+
+
+class CategoryEnum(str, Enum):
+    personal = "personal"
+    work = "work"
+    development = "development"
+
+
 @router.get("/", response_model=List[TodoRead])
 def get_todos(
     current_user: Annotated[User, Depends(get_current_user)],
     session: SessionDep,
-    category: str | None = None,
+    # category: str | None = None,
     period: str | None = None,
+    category: Annotated[Optional[List[CategoryEnum]], Query()] = None,
+    status: Annotated[Optional[List[StatusEnum]], Query()] = None,
 ):
     base_query = select(Todo).where(Todo.user_id == current_user.id)
-    # base_query = select(Todo)
 
     if category:
-        base_query = base_query.where(Todo.category == category)
+        base_query = base_query.where(Todo.category.in_(category))
+
+    # if category:
+    #     base_query = base_query.where(Todo.category == category)
 
     HU_TZ = ZoneInfo("Europe/Budapest")
     now_local = datetime.now(HU_TZ)
@@ -43,6 +60,9 @@ def get_todos(
         base_query = base_query.where(
             Todo.deadline >= start_datetime, Todo.deadline < end_datetime
         )
+
+    if status:
+        base_query = base_query.where(Todo.status.in_(status))
 
     todos = session.exec(base_query).all()
 
@@ -81,3 +101,35 @@ def delete_todo(
     session.delete(todo)
     session.commit()
     return {"ok": True}
+
+
+@router.patch("/{todo_id}")
+def update_todo(
+    todo_id: int,
+    todo_update: TodoUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: SessionDep,
+):
+    db_todo = session.get(Todo, todo_id)
+
+    if not db_todo or db_todo.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Todo not found")
+
+    update_data = todo_update.model_dump(exclude_unset=True)
+
+    new_status = update_data.get("status")
+    if new_status is not None:
+        if new_status == "done":
+            db_todo.completed_at = datetime.now(timezone.utc)
+        else:
+            db_todo.completed_at = None
+
+    for field, value in update_data.items():
+        setattr(db_todo, field, value)
+
+    db_todo.modified_at = datetime.now(timezone.utc)
+
+    session.add(db_todo)
+    session.commit()
+    session.refresh(db_todo)
+    return db_todo
