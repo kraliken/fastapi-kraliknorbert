@@ -103,3 +103,13 @@ class TodoCreate(SQLModel):
     status: Optional[Status] = Status.backlog
     deadline: datetime
     priority: Optional[int] = 1
+
+
+class TodoUpdate(SQLModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[Category] = None
+    status: Optional[Status] = None
+    deadline: Optional[datetime] = None
+    priority: Optional[int] = None
+    archived: Optional[bool] = None
