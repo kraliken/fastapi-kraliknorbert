@@ -96,6 +96,11 @@ class TodoRead(SQLModel):
     deadline: datetime
 
 
+class TodoListResponse(SQLModel):
+    items: List[TodoRead]
+    total: int
+
+
 class TodoCreate(SQLModel):
     title: str
     description: Optional[str] = None

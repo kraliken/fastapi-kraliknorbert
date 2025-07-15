@@ -1,7 +1,14 @@
 from fastapi import APIRouter, Depends, status, HTTPException, Response, Query
 from fastapi.responses import StreamingResponse
 from database.connection import SessionDep
-from database.models import Todo, TodoCreate, TodoRead, TodoUpdate, User
+from database.models import (
+    Todo,
+    TodoCreate,
+    TodoRead,
+    TodoUpdate,
+    TodoListResponse,
+    User,
+)
 from sqlmodel import select, func
 from enum import Enum
 from typing import Annotated, List, Optional
@@ -26,22 +33,22 @@ class CategoryEnum(str, Enum):
     development = "development"
 
 
-@router.get("/", response_model=List[TodoRead])
+@router.get("/", response_model=TodoListResponse)
 def get_todos(
     current_user: Annotated[User, Depends(get_current_user)],
     session: SessionDep,
-    # category: str | None = None,
     period: str | None = None,
     category: Annotated[Optional[List[CategoryEnum]], Query()] = None,
     status: Annotated[Optional[List[StatusEnum]], Query()] = None,
+    limit: int = Query(5, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ):
     base_query = select(Todo).where(Todo.user_id == current_user.id)
 
+    print("LIMIT", limit)
+
     if category:
         base_query = base_query.where(Todo.category.in_(category))
-
-    # if category:
-    #     base_query = base_query.where(Todo.category == category)
 
     HU_TZ = ZoneInfo("Europe/Budapest")
     now_local = datetime.now(HU_TZ)
@@ -67,9 +74,17 @@ def get_todos(
     if status:
         base_query = base_query.where(Todo.status.in_(status))
 
-    todos = session.exec(base_query).all()
+    # Teljes elemszám lekérdezése (szűrés után, paginálás nélkül)
+    count_query = select(func.count()).select_from(base_query.subquery())
+    total = session.exec(count_query).one()
 
-    return todos
+    paginated_query = (
+        base_query.order_by(Todo.deadline.asc()).offset(offset).limit(limit)
+    )
+
+    todos = session.exec(paginated_query).all()
+
+    return {"items": todos, "total": total}
 
 
 @router.get("/report/daily")
