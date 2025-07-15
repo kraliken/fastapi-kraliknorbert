@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, status, HTTPException, Response, Query
+from fastapi.responses import StreamingResponse
 from database.connection import SessionDep
 from database.models import Todo, TodoCreate, TodoRead, TodoUpdate, User
 from sqlmodel import select, func
@@ -7,6 +8,8 @@ from typing import Annotated, List, Optional
 from datetime import datetime, timezone, timedelta
 from routers.auth.oauth2 import get_current_user
 from zoneinfo import ZoneInfo
+from io import BytesIO
+import pandas as pd
 
 router = APIRouter(prefix="/todos", tags=["todos"])
 
@@ -67,6 +70,223 @@ def get_todos(
     todos = session.exec(base_query).all()
 
     return todos
+
+
+@router.get("/report/daily")
+def get_todays_todos(
+    current_user: Annotated[User, Depends(get_current_user)], session: SessionDep
+):
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+
+    done_stmt = select(Todo).where(
+        Todo.user_id == current_user.id,
+        Todo.status == "done",
+        Todo.completed_at >= today_start,
+        Todo.completed_at < today_end,
+    )
+    done_todos = session.exec(done_stmt).all()
+
+    due_stmt = select(Todo).where(
+        Todo.user_id == current_user.id,
+        Todo.status != "done",
+        Todo.deadline >= today_start,
+        Todo.deadline < today_end,
+    )
+    due_todos = session.exec(due_stmt).all()
+
+    return {
+        "done_today": done_todos,
+        "due_today": due_todos,
+    }
+
+
+@router.get("/report/weekly")
+def get_todays_todos(
+    current_user: Annotated[User, Depends(get_current_user)], session: SessionDep
+):
+    now = datetime.now(timezone.utc)
+
+    # Hét kezdete (hétfő 00:00)
+    week_start = now - timedelta(days=now.weekday())
+    week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Hét vége (vasárnap 23:59:59)
+    week_end = week_start + timedelta(days=7)
+
+    done_stmt = select(Todo).where(
+        Todo.user_id == current_user.id,
+        Todo.status == "done",
+        Todo.completed_at >= week_start,
+        Todo.completed_at < week_end,
+    )
+    done_todos = session.exec(done_stmt).all()
+
+    due_stmt = select(Todo).where(
+        Todo.user_id == current_user.id,
+        Todo.status != "done",
+        Todo.deadline >= week_start,
+        Todo.deadline < week_end,
+    )
+    due_todos = session.exec(due_stmt).all()
+
+    return {
+        "done_weekly": done_todos,
+        "due_weekly": due_todos,
+    }
+
+
+@router.get("/report/daily/export")
+def get_todays_todos(
+    current_user: Annotated[User, Depends(get_current_user)], session: SessionDep
+):
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+
+    done_stmt = select(Todo).where(
+        Todo.user_id == current_user.id,
+        Todo.status == "done",
+        Todo.completed_at >= today_start,
+        Todo.completed_at < today_end,
+    )
+    done_todos = session.exec(done_stmt).all()
+
+    due_stmt = select(Todo).where(
+        Todo.user_id == current_user.id,
+        Todo.status != "done",
+        Todo.deadline >= today_start,
+        Todo.deadline < today_end,
+    )
+    due_todos = session.exec(due_stmt).all()
+
+    def todos_to_df(todos):
+        if not todos:
+
+            return pd.DataFrame(
+                {
+                    "Title": [""],
+                    "Description": [""],
+                    "Category": [""],
+                    "Deadline": [""],
+                    "Completed At": [""],
+                    "Status": [""],
+                }
+            )
+        return pd.DataFrame(
+            [
+                {
+                    "Title": todo.title,
+                    "Description": todo.description,
+                    "Category": str(todo.category).split(".")[-1],
+                    "Deadline": todo.deadline,
+                    "Completed At": todo.completed_at,
+                    "Status": str(todo.status).split(".")[-1],
+                }
+                for todo in todos
+            ]
+        )
+
+    df_done = todos_to_df(done_todos)
+    df_due = todos_to_df(due_todos)
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df_done.to_excel(writer, sheet_name="Completed Today", index=False)
+        df_due.to_excel(writer, sheet_name="Due Today", index=False)
+
+    output.seek(0)
+
+    filename = f"daily_report_{now.date()}.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+    )
+
+
+@router.get("/report/weekly/export")
+def get_todays_todos(
+    current_user: Annotated[User, Depends(get_current_user)], session: SessionDep
+):
+    now = datetime.now(timezone.utc)
+
+    # Hét kezdete (hétfő 00:00)
+    week_start = now - timedelta(days=now.weekday())
+    week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Hét vége (vasárnap 23:59:59)
+    week_end = week_start + timedelta(days=7)
+
+    done_stmt = select(Todo).where(
+        Todo.user_id == current_user.id,
+        Todo.status == "done",
+        Todo.completed_at >= week_start,
+        Todo.completed_at < week_end,
+    )
+    done_todos = session.exec(done_stmt).all()
+
+    due_stmt = select(Todo).where(
+        Todo.user_id == current_user.id,
+        Todo.status != "done",
+        Todo.deadline >= week_start,
+        Todo.deadline < week_end,
+    )
+    due_todos = session.exec(due_stmt).all()
+
+    def todos_to_df(todos):
+        if not todos:
+
+            return pd.DataFrame(
+                {
+                    "Title": [""],
+                    "Description": [""],
+                    "Category": [""],
+                    "Deadline": [""],
+                    "Completed At": [""],
+                    "Status": [""],
+                }
+            )
+        df = pd.DataFrame(
+            [
+                {
+                    "Title": todo.title,
+                    "Description": todo.description,
+                    "Category": str(todo.category).split(".")[-1],
+                    "Deadline": todo.deadline,
+                    "Completed At": todo.completed_at,
+                    "Status": str(todo.status).split(".")[-1],
+                }
+                for todo in todos
+            ]
+        )
+        return df.sort_values(["Category"])
+
+    df_done = todos_to_df(done_todos)
+    df_due = todos_to_df(due_todos)
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df_done.to_excel(writer, sheet_name="Completed This Week", index=False)
+        df_due.to_excel(writer, sheet_name="Due This Week", index=False)
+
+    output.seek(0)
+
+    filename = f"weekly_report_{now.date()}.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+    )
 
 
 @router.post("/create", status_code=status.HTTP_201_CREATED)
