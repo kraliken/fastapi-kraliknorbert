@@ -161,6 +161,7 @@ def get_todays_todos(
     )
     due_todos = session.exec(due_stmt).all()
 
+    # service
     def todos_to_df(todos):
         if not todos:
 
@@ -239,6 +240,7 @@ def get_todays_todos(
     )
     due_todos = session.exec(due_stmt).all()
 
+    # service
     def todos_to_df(todos):
         if not todos:
 
