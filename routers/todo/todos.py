@@ -42,10 +42,10 @@ def get_todos(
     status: Annotated[Optional[List[StatusEnum]], Query()] = None,
     limit: int = Query(5, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    sort: str = Query("deadline"),
+    order: str = Query("asc"),
 ):
     base_query = select(Todo).where(Todo.user_id == current_user.id)
-
-    print("LIMIT", limit)
 
     if category:
         base_query = base_query.where(Todo.category.in_(category))
@@ -74,13 +74,25 @@ def get_todos(
     if status:
         base_query = base_query.where(Todo.status.in_(status))
 
+    valid_sort_fields = {
+        "title": Todo.title,
+        "deadline": Todo.deadline,
+    }
+    sort_column = valid_sort_fields.get(sort, Todo.deadline)
+
+    if order == "desc":
+        sort_column = sort_column.desc()
+    else:
+        sort_column = sort_column.asc()
+
     # Teljes elemszám lekérdezése (szűrés után, paginálás nélkül)
     count_query = select(func.count()).select_from(base_query.subquery())
     total = session.exec(count_query).one()
 
-    paginated_query = (
-        base_query.order_by(Todo.deadline.asc()).offset(offset).limit(limit)
-    )
+    # paginated_query = (
+    #     base_query.order_by(Todo.deadline.asc()).offset(offset).limit(limit)
+    # )
+    paginated_query = base_query.order_by(sort_column).offset(offset).limit(limit)
 
     todos = session.exec(paginated_query).all()
 
